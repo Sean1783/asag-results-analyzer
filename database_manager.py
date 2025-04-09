@@ -43,6 +43,16 @@ class DatabaseManager:
         except Exception as e:
             print(f"Database did not insert documents successfully : {e}")
 
+    def update_document(self, collection_name : str, record : dict[Any]):
+        try:
+            collection = self.db[collection_name]
+            collection.update_one(
+                {'_id': record['_id']},
+                {'$set': {'cosine_similarity': record['cosine_similarity']}}
+            )
+        except Exception as e:
+            print(f"Database did not update the document successfully : {e}")
+
     def find_documents(self, collection, query=None) -> Cursor[Mapping[str, Any] | Any] | None:
         if query is None:
             query = {}
