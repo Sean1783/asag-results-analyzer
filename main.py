@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Tuple, List, Dict, Any
 
 from database_manager import DatabaseManager
@@ -25,46 +26,24 @@ MINI_LM = "all-MiniLM-L6-v2"
 #     print(correlation_matrix)
 #     return correlation_matrix
 
-# def normalize_cosine_similarity_scores(cosine_similarity_scores : List[float]):
-#     grade_min, grade_max = 0.0, 1.0
-#     cosine_similarities = np.array(cosine_similarity_scores).reshape(-1, 1)
-#     scaler = MinMaxScaler(feature_range=(grade_min, grade_max))
-#     normalized_grades = scaler.fit_transform(cosine_similarities)
-#     return normalized_grades.flatten()
-
-# def convert_to_embedding(sentence_one, sentence_two, embedding_model):
-#     model = SentenceTransformer(embedding_model, trust_remote_code=True)
-#     embedding = model.encode([sentence_one, sentence_two], convert_to_tensor=True, normalize_embeddings=True)
-#     return embedding
 
 
-# def compute_cosine_similarity(tensor_obj) -> float:
-#     return util.pytorch_cos_sim(tensor_obj[0], tensor_obj[1]).item()
-
-# def get_all_records(database : str, collection : str) -> List[dict]:
-#     db = DatabaseManager(database)
-#     db_collection = db.get_db()[collection]
-#     return list(db_collection.find())
-#     # return list(db_collection.find().limit(10))
-
-# def add_cosine_similarity_to_records(samples : List[dict], embedding_model : str) -> List[dict]:
-#     for record in samples:
-#         reference_answer = record["reference_answer"]
-#         provided_answer = record["provided_answer"]
-#         embeddings = convert_to_embedding(reference_answer, provided_answer, embedding_model)
-#         cosine_similarity = compute_cosine_similarity(embeddings)
-#         record["cosine_similarity_score"] = cosine_similarity
-#     return samples
-
-
-def compute_root_mean_squared_error(human_scores : List[float], predictor_scores : List[float]) -> float:
+def compute_squared_error(human_scores : List[float], predictor_scores : List[float]) -> float:
     human_score_list = np.array(human_scores)
     predictor_list = np.array(predictor_scores)
     rmse = root_mean_squared_error(human_score_list, predictor_list)
     return rmse
 
+def compute_squared_error_score(true_score : float, predictor_score : float) -> float:
+    return (true_score - predictor_score) ** 2
+
+
+
 def compute_average_score_baseline(human_scores : List[float]) -> float:
     return sum(human_scores) / len(human_scores)
+
+
+
 
 def generate_binned_values_map(feature_name : str, scores : List[float]) -> Dict[str, int]:
     field_name = "discrete_" + feature_name
@@ -83,20 +62,9 @@ def run_qwk(sample_list : list[dict]) -> float:
     qwk = compute_quadratic_weighted_kappa(human_scores, ai_scores)
     return qwk
 
-# def generate_embeddings(
-#         reference_answer_list : List[str],
-#         student_answer_list : List[str],
-#         embedding_model : str) -> Tuple[Tensor, Tensor]:
-#     pass
-#     # assert len(reference_answer_list) == len(student_answer_list), "Lists must be the same length"
-#     # consolidated_list = reference_answer_list + student_answer_list
-#     # model = SentenceTransformer(embedding_model, trust_remote_code=True)
-#     # embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
-#     # return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
+
 
 def generate_embeddings(sample_list : list[dict], embedding_model : str) -> Tuple[Tensor, Tensor]:
-    # reference_answer_list = [sample["reference_answer"] for sample in sample_list]
-    # student_answer_list = [sample["provided_answer"] for sample in sample_list]
     reference_answer_list = []
     student_answer_list = []
     for sample in sample_list:
@@ -106,7 +74,6 @@ def generate_embeddings(sample_list : list[dict], embedding_model : str) -> Tupl
     consolidated_list = reference_answer_list + student_answer_list
     model = SentenceTransformer(embedding_model, trust_remote_code=True)
     embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
-    # return generate_embeddings(reference_answer, student_answer, embedding_model)
     return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
 
 def compute_pairwise_similarities(emb_1: Tensor, emb_2: Tensor) -> Tensor:
@@ -133,15 +100,57 @@ def update_collection_records_with_cosine_similarity(
     db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
 
 
+
+
 def main():
-    collections = ["Beetle", "SAF", "Mohler", "SciEntsBank"]
+    # collections = ["Beetle", "SAF", "Mohler", "SciEntsBank"]
+    collections = ["Beetle"]
     database_name = DbDetails.MYERGER_DB_NAME.value
     db = DatabaseManager(database_name)
     for collection in collections:
         samples = list(db.find_documents(collection))
+        human_scores = [sample["normalized_grade"] for sample in samples]
+        true_score_average = compute_average_score_baseline(human_scores)
+
+        field_names = [
+            "_id",
+            "true_score",
+            "average_score_baseline",
+            "ai_score",
+            "cosine_similarity_score",
+            "average_score_predictor_error",
+            "ai_predictor_error",
+            "cosine_similarity_predictor_error"]
+
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{collection}_{timestamp}.csv"
+
+        with open(filename, mode="w", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=field_names)
+            writer.writeheader()
+            for rec in samples:
+                _id = rec["_id"]
+                true_score = rec["normalized_grade"]
+                ai_score = rec["ai_response"]["score"]
+                cosine_similarity_score = rec["cosine_similarity"]
+                average_score_error = compute_squared_error_score(true_score, true_score_average)
+                ai_score_error = compute_squared_error_score(true_score, ai_score)
+                cosine_similarity_error = compute_squared_error_score(true_score, cosine_similarity_score)
+                writer.writerow({
+                    "_id": _id,
+                    "true_score": true_score,
+                    "average_score_baseline": true_score_average,
+                    "ai_score": ai_score,
+                    "cosine_similarity_score" : cosine_similarity_score,
+                    "average_score_predictor_error" : average_score_error,
+                    "ai_predictor_error" : ai_score_error,
+                    "cosine_similarity_predictor_error" : cosine_similarity_error
+                })
+
+
+
+
         # update_collection_records_with_cosine_similarity(db, collection, samples, NOMIC)
-
-
 
 
 
