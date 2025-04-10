@@ -1,9 +1,10 @@
 import os
 from typing import Any, List
 
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from dotenv import load_dotenv
 from pymongo.synchronous.cursor import Cursor, Mapping
+from bson import ObjectId
 
 class DatabaseManager:
     def __init__(self, database_name: str) -> None:
@@ -43,15 +44,35 @@ class DatabaseManager:
         except Exception as e:
             print(f"Database did not insert documents successfully : {e}")
 
-    def update_document(self, collection_name : str, record : dict[Any]):
+    def update_document(self, collection_name : str, record : dict):
         try:
             collection = self.db[collection_name]
             collection.update_one(
-                {'_id': record['_id']},
+                {'_id': ObjectId(record['_id'])},
                 {'$set': {'cosine_similarity': record['cosine_similarity']}}
             )
         except Exception as e:
             print(f"Database did not update the document successfully : {e}")
+
+    def batch_update_cosine_similarity(self, collection_name : str, records : List[dict]) -> List | None:
+        operations = []
+        for record in records:
+            operations.append(
+                UpdateOne(
+                    {'_id': ObjectId(record['_id'])},
+                    {'$set': {'cosine_similarity': record['cosine_similarity']}}
+                )
+            )
+        if operations:
+            collection = self.db[collection_name]
+            try:
+                result = collection.bulk_write(operations)
+                print(f"Matched: {result.matched_count}, Modified: {result.modified_count}")
+            except Exception as e:
+                print(f"Something went wrong during batch update: {e}")
+        else:
+            print("No records to update.")
+
 
     def find_documents(self, collection, query=None) -> Cursor[Mapping[str, Any] | Any] | None:
         if query is None:

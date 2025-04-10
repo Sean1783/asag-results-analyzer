@@ -83,29 +83,54 @@ def run_qwk(sample_list : list[dict]) -> float:
     qwk = compute_quadratic_weighted_kappa(human_scores, ai_scores)
     return qwk
 
-def generate_embeddings(reference_answer_list : List[str], student_answer_list : List[str], embedding_model : str):
+# def generate_embeddings(
+#         reference_answer_list : List[str],
+#         student_answer_list : List[str],
+#         embedding_model : str) -> Tuple[Tensor, Tensor]:
+#     pass
+#     # assert len(reference_answer_list) == len(student_answer_list), "Lists must be the same length"
+#     # consolidated_list = reference_answer_list + student_answer_list
+#     # model = SentenceTransformer(embedding_model, trust_remote_code=True)
+#     # embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
+#     # return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
+
+def generate_embeddings(sample_list : list[dict], embedding_model : str) -> Tuple[Tensor, Tensor]:
+    # reference_answer_list = [sample["reference_answer"] for sample in sample_list]
+    # student_answer_list = [sample["provided_answer"] for sample in sample_list]
+    reference_answer_list = []
+    student_answer_list = []
+    for sample in sample_list:
+        reference_answer_list.append(sample["reference_answer"])
+        student_answer_list.append(sample["provided_answer"])
     assert len(reference_answer_list) == len(student_answer_list), "Lists must be the same length"
     consolidated_list = reference_answer_list + student_answer_list
     model = SentenceTransformer(embedding_model, trust_remote_code=True)
     embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
+    # return generate_embeddings(reference_answer, student_answer, embedding_model)
     return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
-
-def run_generate_embeddings(sample_list : list[dict], embedding_model : str) -> Tuple[Tensor, Tensor]:
-    reference_answer = [sample["reference_answer"] for sample in sample_list]
-    student_answer = [sample["provided_answer"] for sample in sample_list]
-    return generate_embeddings(reference_answer, student_answer, embedding_model)
 
 def compute_pairwise_similarities(emb_1: Tensor, emb_2: Tensor) -> Tensor:
     return F.cosine_similarity(emb_1, emb_2, dim=1)
 
-def run_add_cosine_similarity_to_records(sample_list : list[dict], cosine_similarity_scores : Tensor) -> list[dict]:
+def add_cosine_similarity_to_record_list(
+        sample_list : list[dict],
+        cosine_similarity_scores : Tensor) -> list[dict]:
     for record, score in zip(sample_list, cosine_similarity_scores):
-        record["cosine_similarity_score"] = score.item()
+        record["cosine_similarity"] = score.item()
     return sample_list
 
-def update_db_records_with_cosine_similarity(db : DatabaseManager, db_collection : str, sample_list : list[dict]) -> None:
-    for record in sample_list:
-        db.update_document(db_collection, record)
+def db_batch_update(db : DatabaseManager, db_collection_name : str, updated_sample_list : list[dict]) -> None:
+    db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
+
+def update_collection_records_with_cosine_similarity(
+        db : DatabaseManager,
+        db_collection_name : str,
+        samples : list[dict],
+        embedding_model : str) -> None:
+    ref_ans_embd, std_ans_emb = generate_embeddings(samples, embedding_model)
+    similarities = compute_pairwise_similarities(ref_ans_embd, std_ans_emb)
+    updated_sample_list = add_cosine_similarity_to_record_list(samples, similarities)
+    db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
 
 
 def main():
@@ -114,10 +139,10 @@ def main():
     db = DatabaseManager(database_name)
     for collection in collections:
         samples = list(db.find_documents(collection))
-        ref_ans_embd, std_ans_emb = run_generate_embeddings(samples, NOMIC)
-        similarities = compute_pairwise_similarities(ref_ans_embd, std_ans_emb)
-        updated_sample_list = run_add_cosine_similarity_to_records(samples, similarities)
-        print(updated_sample_list)
+        # update_collection_records_with_cosine_similarity(db, collection, samples, NOMIC)
+
+
+
 
 
         # Works
@@ -142,8 +167,6 @@ def main():
         # print("RMSE of average score predictor:", average_score_baseline_rmse)
 
 
-# Capture individual results to examine for trends between them and/or outliers.
-# Could store these in a separate db or collection
 if __name__ == '__main__':
     main()
 
