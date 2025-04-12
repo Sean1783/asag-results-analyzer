@@ -1,23 +1,25 @@
 from datetime import datetime
 from typing import Tuple, List, Dict, Any
+import csv
 
-from database_manager import DatabaseManager
 from sklearn.metrics import cohen_kappa_score, root_mean_squared_error
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from torch import Tensor
 import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer, util, SimilarityFunction
+from sentence_transformers.cross_encoder import CrossEncoder
 from nomic import embed
 import pandas as pd
 
 from constants import *
+from database_manager import DatabaseManager
 
-import csv
 
 DATABASE_NAME = "myergerDB"
 NOMIC = "nomic-ai/nomic-embed-text-v1"
 MINI_LM = "all-MiniLM-L6-v2"
+
 
 # def compute_pearson_correlation(scores : Dict[str, List[Any]]) -> pd.DataFrame:
 #     df = pd.DataFrame(scores)
@@ -27,44 +29,41 @@ MINI_LM = "all-MiniLM-L6-v2"
 #     return correlation_matrix
 
 
-
-def compute_squared_error(human_scores : List[float], predictor_scores : List[float]) -> float:
+def compute_squared_error(human_scores: List[float], predictor_scores: List[float]) -> float:
     human_score_list = np.array(human_scores)
     predictor_list = np.array(predictor_scores)
     rmse = root_mean_squared_error(human_score_list, predictor_list)
     return rmse
 
-def compute_squared_error_score(true_score : float, predictor_score : float) -> float:
+
+def compute_squared_error_score(true_score: float, predictor_score: float) -> float:
     return (true_score - predictor_score) ** 2
 
 
-
-def compute_average_score_baseline(human_scores : List[float]) -> float:
+def compute_average_score_baseline(human_scores: List[float]) -> float:
     return sum(human_scores) / len(human_scores)
 
 
+# def generate_binned_values_map(feature_name : str, scores : List[float]) -> Dict[str, int]:
+#     field_name = "discrete_" + feature_name
+#     binned_scores = {field_name: [round(score * 10) for score in scores]}
+#     return binned_scores
 
-
-def generate_binned_values_map(feature_name : str, scores : List[float]) -> Dict[str, int]:
-    field_name = "discrete_" + feature_name
-    binned_scores = {field_name: [round(score * 10) for score in scores]}
-    return binned_scores
-
-def compute_quadratic_weighted_kappa(human_scores_list : List[float], predictor_score_list: List[float]) -> float:
+def compute_quadratic_weighted_kappa(human_scores_list: List[float], predictor_score_list: List[float]) -> float:
     discrete_human_scores = [round(score * 10) for score in human_scores_list]
     discrete_predictor_scores = [round(score * 10) for score in predictor_score_list]
-    predictor_qwk = cohen_kappa_score(discrete_human_scores, discrete_predictor_scores, weights="quadratic" )
+    predictor_qwk = cohen_kappa_score(discrete_human_scores, discrete_predictor_scores, weights="quadratic")
     return predictor_qwk
 
-def run_qwk(sample_list : list[dict]) -> float:
+
+def run_qwk(sample_list: list[dict]) -> float:
     human_scores = [sample["normalized_grade"] for sample in sample_list]
     ai_scores = [sample["ai_response"]["score"] for sample in sample_list]
     qwk = compute_quadratic_weighted_kappa(human_scores, ai_scores)
     return qwk
 
 
-
-def generate_embeddings(sample_list : list[dict], embedding_model : str) -> Tuple[Tensor, Tensor]:
+def generate_embeddings(sample_list: list[dict], embedding_model: str) -> Tuple[Tensor, Tensor]:
     reference_answer_list = []
     student_answer_list = []
     for sample in sample_list:
@@ -76,30 +75,32 @@ def generate_embeddings(sample_list : list[dict], embedding_model : str) -> Tupl
     embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
     return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
 
+
 def compute_pairwise_similarities(emb_1: Tensor, emb_2: Tensor) -> Tensor:
     return F.cosine_similarity(emb_1, emb_2, dim=1)
 
+
 def add_cosine_similarity_to_record_list(
-        sample_list : list[dict],
-        cosine_similarity_scores : Tensor) -> list[dict]:
+        sample_list: list[dict],
+        cosine_similarity_scores: Tensor) -> list[dict]:
     for record, score in zip(sample_list, cosine_similarity_scores):
         record["cosine_similarity"] = score.item()
     return sample_list
 
-def db_batch_update(db : DatabaseManager, db_collection_name : str, updated_sample_list : list[dict]) -> None:
+
+def db_batch_update(db: DatabaseManager, db_collection_name: str, updated_sample_list: list[dict]) -> None:
     db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
 
+
 def update_collection_records_with_cosine_similarity(
-        db : DatabaseManager,
-        db_collection_name : str,
-        samples : list[dict],
-        embedding_model : str) -> None:
+        db: DatabaseManager,
+        db_collection_name: str,
+        samples: list[dict],
+        embedding_model: str) -> None:
     ref_ans_embd, std_ans_emb = generate_embeddings(samples, embedding_model)
     similarities = compute_pairwise_similarities(ref_ans_embd, std_ans_emb)
     updated_sample_list = add_cosine_similarity_to_record_list(samples, similarities)
     db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
-
-
 
 
 def main():
@@ -109,18 +110,23 @@ def main():
     db = DatabaseManager(database_name)
     for collection in collections:
         samples = list(db.find_documents(collection))
+        # To update db records with cosine similarity - must be run once before generating results
+        # update_collection_records_with_cosine_similarity(db, collection, samples, NOMIC)
         human_scores = [sample["normalized_grade"] for sample in samples]
         true_score_average = compute_average_score_baseline(human_scores)
+        quadratic_weighted_kappa = run_qwk(samples)
 
         field_names = [
             "_id",
             "true_score",
+            "weight",
             "average_score_baseline",
             "ai_score",
             "cosine_similarity_score",
             "average_score_predictor_error",
             "ai_predictor_error",
-            "cosine_similarity_predictor_error"]
+            "cosine_similarity_predictor_error",
+            "quadratic_weighted_kappa"]
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = f"{collection}_{timestamp}.csv"
@@ -130,6 +136,7 @@ def main():
             writer.writeheader()
             for rec in samples:
                 _id = rec["_id"]
+                weight = rec["weight"]
                 true_score = rec["normalized_grade"]
                 ai_score = rec["ai_response"]["score"]
                 cosine_similarity_score = rec["cosine_similarity"]
@@ -139,18 +146,15 @@ def main():
                 writer.writerow({
                     "_id": _id,
                     "true_score": true_score,
+                    "weight": weight,
                     "average_score_baseline": true_score_average,
                     "ai_score": ai_score,
-                    "cosine_similarity_score" : cosine_similarity_score,
-                    "average_score_predictor_error" : average_score_error,
-                    "ai_predictor_error" : ai_score_error,
-                    "cosine_similarity_predictor_error" : cosine_similarity_error
+                    "cosine_similarity_score": cosine_similarity_score,
+                    "average_score_predictor_error": average_score_error,
+                    "ai_predictor_error": ai_score_error,
+                    "cosine_similarity_predictor_error": cosine_similarity_error,
+                    "quadratic_weighted_kappa": quadratic_weighted_kappa
                 })
-
-
-
-
-        # update_collection_records_with_cosine_similarity(db, collection, samples, NOMIC)
 
 
 
@@ -179,30 +183,6 @@ def main():
 if __name__ == '__main__':
     main()
 
-    # Using all-MiniLM-L6-v2 embedding:
-    # Using gpt-4o-mini results:
-
-    # Output for Beetle: data results
-    # AI RMSE: 0.27306897785480255
-    # Cosine RMSE: 0.3315366854401315
-    # RMSE of average score predictor: 0.3295264091404324
-
-    # Output for SAF: data results:
-    # AI RMSE: 0.26536782648492513
-    # Cosine RMSE: 0.30605616690427473
-    # RMSE of average score predictor: 0.30531565587473924
-
-    # Output for Mohler: data results:
-    # AI RMSE: 0.17185265006200323
-    # Cosine RMSE: 0.27780096999831605
-    # RMSE of average score predictor: 0.2299939612733826
-
-    # Output for SciEntsBank: data results:
-    # AI RMSE: 0.3262695999504886
-    # Cosine RMSE: 0.3741241689943224
-    # RMSE of average score predictor: 0.38351686427742027
-
-
     # QWK results
     # Connected to database
     # Collection : Beetle - AI/human QWK: 0.5888277689527681
@@ -212,7 +192,6 @@ if __name__ == '__main__':
     # Collection : Mohler - AI/human QWK: 0.7128694718369806
     # Connected to database
     # Collection : SciEntsBank - AI/human QWK: 0.5271823778090929
-
 
     # Connected to database
     # Collection : Beetle - AI & human QWK: 0.5888277689527681
