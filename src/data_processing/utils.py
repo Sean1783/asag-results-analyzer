@@ -1,19 +1,16 @@
 from datetime import datetime
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List
 import csv
+from pathlib import Path
 
 from sklearn.metrics import cohen_kappa_score, root_mean_squared_error
-from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 from torch import Tensor
 import torch.nn.functional as F
-from sentence_transformers import SentenceTransformer, util, SimilarityFunction
-from sentence_transformers.cross_encoder import CrossEncoder
-from nomic import embed
-import pandas as pd
+from sentence_transformers import SentenceTransformer
 
 from constants import *
-from database_manager import DatabaseManager
+from src.data_access.myerger_db_manager import MyergerDbManager
 
 
 DATABASE_NAME = "myergerDB"
@@ -88,12 +85,12 @@ def add_cosine_similarity_to_record_list(
     return sample_list
 
 
-def db_batch_update(db: DatabaseManager, db_collection_name: str, updated_sample_list: list[dict]) -> None:
+def db_batch_update(db: MyergerDbManager, db_collection_name: str, updated_sample_list: list[dict]) -> None:
     db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
 
 
 def update_collection_records_with_cosine_similarity(
-        db: DatabaseManager,
+        db: MyergerDbManager,
         db_collection_name: str,
         samples: list[dict],
         embedding_model: str) -> None:
@@ -105,9 +102,9 @@ def update_collection_records_with_cosine_similarity(
 
 def main():
     # collections = ["Beetle", "SAF", "Mohler", "SciEntsBank"]
-    collections = ["Beetle"]
+    collections = ["SAF"]
     database_name = DbDetails.MYERGER_DB_NAME.value
-    db = DatabaseManager(database_name)
+    db = MyergerDbManager(database_name)
     for collection in collections:
         samples = list(db.find_documents(collection))
         # To update db records with cosine similarity - must be run once before generating results
@@ -129,7 +126,8 @@ def main():
             "quadratic_weighted_kappa"]
 
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        filename = f"{collection}_{timestamp}.csv"
+        filename = Path(__file__).parent.parent / "data" / f"{collection}_{timestamp}.csv"
+        # filename = f".../data/{collection}_{timestamp}.csv"
 
         with open(filename, mode="w", newline="") as file:
             writer = csv.DictWriter(file, fieldnames=field_names)

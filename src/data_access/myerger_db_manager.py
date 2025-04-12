@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 from pymongo.synchronous.cursor import Cursor, Mapping
 from bson import ObjectId
 
-class DatabaseManager:
-    def __init__(self, database_name: str) -> None:
+class MyergerDbManager:
+    def __init__(self, database_name: str=None):
         self.db = None
         self.connect_to_database(database_name)
 

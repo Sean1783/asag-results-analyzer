@@ -1,23 +1,19 @@
-from typing import Tuple, List, Dict, Any
+from typing import List, Dict, Any
 
-from database_manager import DatabaseManager
-from sklearn.metrics import cohen_kappa_score
+from src.data_access.myerger_db_manager import MyergerDbManager
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 
-from sentence_transformers import SentenceTransformer, util, SimilarityFunction
-from nomic import embed
+from sentence_transformers import SentenceTransformer, util
 import pandas as pd
-
-import csv
 
 DATABASE_NAME = "myergerDB"
 NOMIC = "nomic-ai/nomic-embed-text-v1"  # --- for nomic embedding
 MINI_LM = "all-MiniLM-L6-v2"  # --- for simple fast embedding model
 
 
-def connect_to_database(database_name: str) -> None | DatabaseManager:
-    db = DatabaseManager(database_name)
+def connect_to_database(database_name: str) -> None | MyergerDbManager:
+    db = MyergerDbManager(database_name)
     return db
 
     # DATABASE_NAME = "myergerDB"
@@ -25,7 +21,7 @@ def connect_to_database(database_name: str) -> None | DatabaseManager:
 
 
 def get_all_documents(collection):
-    db = DatabaseManager("myergerDB")
+    db = MyergerDbManager("myergerDB")
     records = db.find_documents(collection)
     aggregate_human_score = 0
     aggregate_ai_score = 0
@@ -40,7 +36,7 @@ def get_all_documents(collection):
 
 
 def cosine_similarity_test() -> dict[str, list[Any]]:
-    db = DatabaseManager("myergerDB")
+    db = MyergerDbManager("myergerDB")
     records = db.find_documents("results1")
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -94,7 +90,7 @@ def nomic_test():
 
 
 def compare_embedding_similarities():
-    db = DatabaseManager("myergerDB")
+    db = MyergerDbManager("myergerDB")
     records = db.find_documents("results1", {'data_source': 'SciEntsBank'})
     sbert_model = SentenceTransformer("all-MiniLM-L6-v2")
     nomic_model = SentenceTransformer("nomic-ai/nomic-embed-text-v1", trust_remote_code=True)
@@ -125,7 +121,7 @@ def compare_embedding_similarities():
 
 
 def something():
-    db = DatabaseManager("myergerDB")
+    db = MyergerDbManager("myergerDB")
     collection = db.get_db()["ds1"]
     dataset_names = collection.distinct("data_source")
     question_bank = {}
@@ -198,7 +194,7 @@ def compute_cosine_similarity(tensor_obj) -> float:
 
 
 def get_all_records(database: str, collection: str) -> List[dict]:
-    db = DatabaseManager(database)
+    db = MyergerDbManager(database)
     db_collection = db.get_db()[collection]
     return list(db_collection.find())
 
