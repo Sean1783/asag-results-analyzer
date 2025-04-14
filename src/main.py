@@ -12,6 +12,7 @@ from sentence_transformers import SentenceTransformer
 from constants import *
 from src.data_access.db_factory import DbFactory
 # from src.data_access.myerger_database_manager import MyergerDatabaseManager
+from src. data_output.myerger_csv_exporter import MyergerCsvExporter
 from src.data_processing.cosine_sim import CosineSim
 from src.data_processing.metric_context import MetricContext
 from src.data_processing.metric_generator import MetricGenerator
@@ -91,20 +92,28 @@ def update_collection_records_with_cosine_similarity(
 def main():
     # Going to need a collection name for each AI model and each dataset.
     # collection = "Beetle"
-    collection = "claude-3-haiku-20240307_Beetle"
+
+    # collection = "chatgpt-4o-latest_Beetle"
+    # collection = "chatgpt-4o-latest_SAF"
+    # collection = "chatgpt-4o-latest_Mohler"
+    # collection = "chatgpt-4o-latest_SciEntsBank"
+    # collection = "claude-3-haiku-20240307_Beetle"
+    # collection = "claude-3-haiku-20240307_SAF"
+    # collection = "claude-3-haiku-20240307_Mohler"
+    collection = "claude-3-haiku-20240307_SciEntsBank"
     database_name = DbDetails.MYERGER_DB_NAME.value
     db = DbFactory.get_database_manager(database_name)
-    # db = MyergerDatabaseManager(database_name)
     samples = list(db.find_documents(collection))
     data_metric = MetricContext(QuadWeightKappa())
     qwk = data_metric.generate_metric(samples)
     print(f"QWK: {qwk}")
     data_metric.set_metric_generator(CosineSim(NOMIC))
     similarities = data_metric.generate_metric(samples)
-    # for sample in similarities:
-    #     print(sample.item())
     updated_records = add_cosine_similarity_to_record_list(samples, similarities)
     db.batch_update_cosine_similarity(collection, updated_records)
+    # exporter = MyergerCsvExporter()
+    # exporter.set_qwk(qwk)
+    # exporter.export(collection, samples)
 
 '''
 def main():
