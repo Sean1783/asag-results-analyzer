@@ -3,8 +3,9 @@ from datetime import datetime
 import csv
 from pathlib import Path
 
+
 class MyergerCsvExporter:
-    def __init__(self, qwk : float=None):
+    def __init__(self, qwk: float = None):
         self.field_names = [
             "_id",
             "true_score",
@@ -14,11 +15,10 @@ class MyergerCsvExporter:
             "quadratic_weighted_kappa"]
         self.quadratic_weighted_kappa = qwk
 
-    def set_qwk(self, qwk : float) -> None:
+    def set_qwk(self, qwk: float) -> None:
         self.quadratic_weighted_kappa = qwk
 
-
-    def export(self, sample_set_name : str, samples : List[dict]) -> None:
+    def export(self, sample_set_name: str, samples: List[dict]) -> None:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         filename = Path(__file__).parent.parent.parent / "data" / f"{sample_set_name}_{timestamp}.csv"
         with open(filename, mode="w", newline="") as file:

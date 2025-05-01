@@ -1,15 +1,16 @@
 from typing import List
 
 from sklearn.metrics import cohen_kappa_score
-
 from src.data_processing.metric_generator import MetricGenerator
+
 
 class QuadWeightKappa(MetricGenerator):
 
-    def generate_metric(self, records: List[dict]) ->  float:
+    def generate_metric(self, records: List[dict]) -> float:
         return self.run_qwk(records)
 
-    def compute_quadratic_weighted_kappa(self, human_scores_list: List[float], predictor_score_list: List[float]) -> float:
+    def compute_quadratic_weighted_kappa(self, human_scores_list: List[float],
+                                         predictor_score_list: List[float]) -> float:
         discrete_human_scores = [round(score * 10) for score in human_scores_list]
         discrete_predictor_scores = [round(score * 10) for score in predictor_score_list]
         predictor_qwk = cohen_kappa_score(discrete_human_scores, discrete_predictor_scores, weights="quadratic")

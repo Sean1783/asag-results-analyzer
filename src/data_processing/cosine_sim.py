@@ -6,8 +6,9 @@ import torch.nn.functional as F
 
 from src.data_processing.metric_generator import MetricGenerator
 
+
 class CosineSim(MetricGenerator):
-    def __init__(self, embedding_model : str):
+    def __init__(self, embedding_model: str):
         self.embedding_model = embedding_model
 
     def generate_metric(self, records: List[dict]) -> Tensor:
@@ -15,7 +16,7 @@ class CosineSim(MetricGenerator):
         similarities = self.compute_pairwise_similarities(ref_ans_embd, std_ans_emb)
         return similarities
 
-    def generate_embeddings(self, sample_list: list[dict], embedding_model: str=None) -> Tuple[Tensor, Tensor]:
+    def generate_embeddings(self, sample_list: list[dict], embedding_model: str = None) -> Tuple[Tensor, Tensor]:
         reference_answer_list = []
         student_answer_list = []
         for sample in sample_list:

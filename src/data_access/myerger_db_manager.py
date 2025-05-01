@@ -6,8 +6,9 @@ from dotenv import load_dotenv
 from pymongo.synchronous.cursor import Cursor, Mapping
 from bson import ObjectId
 
+
 class MyergerDbManager:
-    def __init__(self, database_name: str=None):
+    def __init__(self, database_name: str = None):
         self.db = None
         self.connect_to_database(database_name)
 
@@ -18,7 +19,7 @@ class MyergerDbManager:
         else:
             return self.db
 
-    def connect_to_database(self, db_name : str) -> None:
+    def connect_to_database(self, db_name: str) -> None:
         load_dotenv()
         uri = os.getenv("MONGO_URI")
         try:
@@ -36,7 +37,7 @@ class MyergerDbManager:
         except Exception as e:
             print(f"Database did not insert document successfully : {e}")
 
-    def insert_documents(self, collection_name : str, documents : List) -> List | None:
+    def insert_documents(self, collection_name: str, documents: List) -> List | None:
         try:
             collection = self.db[collection_name]
             result = collection.insert_many(documents)
@@ -44,7 +45,7 @@ class MyergerDbManager:
         except Exception as e:
             print(f"Database did not insert documents successfully : {e}")
 
-    def update_document(self, collection_name : str, record : dict):
+    def update_document(self, collection_name: str, record: dict):
         try:
             collection = self.db[collection_name]
             collection.update_one(
@@ -54,7 +55,7 @@ class MyergerDbManager:
         except Exception as e:
             print(f"Database did not update the document successfully : {e}")
 
-    def batch_update_cosine_similarity(self, collection_name : str, records : List[dict]) -> List | None:
+    def batch_update_cosine_similarity(self, collection_name: str, records: List[dict]) -> List | None:
         operations = []
         for record in records:
             operations.append(
@@ -72,7 +73,6 @@ class MyergerDbManager:
                 print(f"Something went wrong during batch update: {e}")
         else:
             print("No records to update.")
-
 
     def find_documents(self, collection, query=None) -> Cursor[Mapping[str, Any] | Any] | None:
         if query is None:
