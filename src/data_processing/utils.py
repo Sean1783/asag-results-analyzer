@@ -9,7 +9,6 @@ from torch import Tensor
 import torch.nn.functional as F
 from sentence_transformers import SentenceTransformer
 
-from constants import *
 from src.data_access.myerger_db_manager import MyergerDbManager
 
 
@@ -18,23 +17,16 @@ NOMIC = "nomic-ai/nomic-embed-text-v1"
 MINI_LM = "all-MiniLM-L6-v2"
 
 
-# def compute_pearson_correlation(scores : Dict[str, List[Any]]) -> pd.DataFrame:
-#     df = pd.DataFrame(scores)
-#     correlation_matrix = df.corr(method='pearson')
-#     print("Pandas Correlation Matrix:")
-#     print(correlation_matrix)
-#     return correlation_matrix
+
+# def compute_squared_error(human_scores: List[float], predictor_scores: List[float]) -> float:
+#     human_score_list = np.array(human_scores)
+#     predictor_list = np.array(predictor_scores)
+#     rmse = root_mean_squared_error(human_score_list, predictor_list)
+#     return rmse
 
 
-def compute_squared_error(human_scores: List[float], predictor_scores: List[float]) -> float:
-    human_score_list = np.array(human_scores)
-    predictor_list = np.array(predictor_scores)
-    rmse = root_mean_squared_error(human_score_list, predictor_list)
-    return rmse
-
-
-def compute_squared_error_score(true_score: float, predictor_score: float) -> float:
-    return (true_score - predictor_score) ** 2
+# def compute_squared_error_score(true_score: float, predictor_score: float) -> float:
+#     return (true_score - predictor_score) ** 2
 
 
 def compute_average_score_baseline(human_scores: List[float]) -> float:
@@ -46,58 +38,58 @@ def compute_average_score_baseline(human_scores: List[float]) -> float:
 #     binned_scores = {field_name: [round(score * 10) for score in scores]}
 #     return binned_scores
 
-def compute_quadratic_weighted_kappa(human_scores_list: List[float], predictor_score_list: List[float]) -> float:
-    discrete_human_scores = [round(score * 10) for score in human_scores_list]
-    discrete_predictor_scores = [round(score * 10) for score in predictor_score_list]
-    predictor_qwk = cohen_kappa_score(discrete_human_scores, discrete_predictor_scores, weights="quadratic")
-    return predictor_qwk
+# def compute_quadratic_weighted_kappa(human_scores_list: List[float], predictor_score_list: List[float]) -> float:
+#     discrete_human_scores = [round(score * 10) for score in human_scores_list]
+#     discrete_predictor_scores = [round(score * 10) for score in predictor_score_list]
+#     predictor_qwk = cohen_kappa_score(discrete_human_scores, discrete_predictor_scores, weights="quadratic")
+#     return predictor_qwk
 
 
-def run_qwk(sample_list: list[dict]) -> float:
-    human_scores = [sample["normalized_grade"] for sample in sample_list]
-    ai_scores = [sample["ai_response"]["score"] for sample in sample_list]
-    qwk = compute_quadratic_weighted_kappa(human_scores, ai_scores)
-    return qwk
+# def run_qwk(sample_list: list[dict]) -> float:
+#     human_scores = [sample["normalized_grade"] for sample in sample_list]
+#     ai_scores = [sample["ai_response"]["score"] for sample in sample_list]
+#     qwk = compute_quadratic_weighted_kappa(human_scores, ai_scores)
+#     return qwk
 
 
-def generate_embeddings(sample_list: list[dict], embedding_model: str) -> Tuple[Tensor, Tensor]:
-    reference_answer_list = []
-    student_answer_list = []
-    for sample in sample_list:
-        reference_answer_list.append(sample["reference_answer"])
-        student_answer_list.append(sample["provided_answer"])
-    assert len(reference_answer_list) == len(student_answer_list), "Lists must be the same length"
-    consolidated_list = reference_answer_list + student_answer_list
-    model = SentenceTransformer(embedding_model, trust_remote_code=True)
-    embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
-    return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
+# def generate_embeddings(sample_list: list[dict], embedding_model: str) -> Tuple[Tensor, Tensor]:
+#     reference_answer_list = []
+#     student_answer_list = []
+#     for sample in sample_list:
+#         reference_answer_list.append(sample["reference_answer"])
+#         student_answer_list.append(sample["provided_answer"])
+#     assert len(reference_answer_list) == len(student_answer_list), "Lists must be the same length"
+#     consolidated_list = reference_answer_list + student_answer_list
+#     model = SentenceTransformer(embedding_model, trust_remote_code=True)
+#     embeddings = model.encode(consolidated_list, convert_to_tensor=True, normalize_embeddings=True)
+#     return embeddings[:len(reference_answer_list)], embeddings[len(reference_answer_list):]
 
 
-def compute_pairwise_similarities(emb_1: Tensor, emb_2: Tensor) -> Tensor:
-    return F.cosine_similarity(emb_1, emb_2, dim=1)
+# def compute_pairwise_similarities(emb_1: Tensor, emb_2: Tensor) -> Tensor:
+#     return F.cosine_similarity(emb_1, emb_2, dim=1)
 
 
-def add_cosine_similarity_to_record_list(
-        sample_list: list[dict],
-        cosine_similarity_scores: Tensor) -> list[dict]:
-    for record, score in zip(sample_list, cosine_similarity_scores):
-        record["cosine_similarity"] = score.item()
-    return sample_list
+# def add_cosine_similarity_to_record_list(
+#         sample_list: list[dict],
+#         cosine_similarity_scores: Tensor) -> list[dict]:
+#     for record, score in zip(sample_list, cosine_similarity_scores):
+#         record["cosine_similarity"] = score.item()
+#     return sample_list
 
 
-def db_batch_update(db: MyergerDbManager, db_collection_name: str, updated_sample_list: list[dict]) -> None:
-    db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
+# def db_batch_update(db: MyergerDbManager, db_collection_name: str, updated_sample_list: list[dict]) -> None:
+#     db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
 
 
-def update_collection_records_with_cosine_similarity(
-        db: MyergerDbManager,
-        db_collection_name: str,
-        samples: list[dict],
-        embedding_model: str) -> None:
-    ref_ans_embd, std_ans_emb = generate_embeddings(samples, embedding_model)
-    similarities = compute_pairwise_similarities(ref_ans_embd, std_ans_emb)
-    updated_sample_list = add_cosine_similarity_to_record_list(samples, similarities)
-    db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
+# def update_collection_records_with_cosine_similarity(
+#         db: MyergerDbManager,
+#         db_collection_name: str,
+#         samples: list[dict],
+#         embedding_model: str) -> None:
+#     ref_ans_embd, std_ans_emb = generate_embeddings(samples, embedding_model)
+#     similarities = compute_pairwise_similarities(ref_ans_embd, std_ans_emb)
+#     updated_sample_list = add_cosine_similarity_to_record_list(samples, similarities)
+#     db.batch_update_cosine_similarity(db_collection_name, updated_sample_list)
 
 
 def main():
@@ -155,47 +147,3 @@ def main():
                 })
 
 
-
-        # Works
-        # print("QWK : ", run_qwk(samples))
-
-        # samples = add_cosine_similarity_to_records(samples, NOMIC)
-
-        # cosine_similarity_scores = [sample["cosine_similarity_score"] for sample in samples]
-        # data = {"human_scores" : human_scores,
-        #         "ai_scores" : ai_scores,
-        #         "cosine_similarity_scores" : cosine_similarity_scores}
-
-        # pearson_matrix = compute_pearson_correlation(data)
-
-        # print(f"Output for {collection_name} data results:")
-        # ai_rmse = compute_root_mean_squared_error(human_scores, ai_scores)
-        # print("AI RMSE:", ai_rmse)
-        # cosine_rmse = compute_root_mean_squared_error(human_scores, cosine_similarity_scores)
-        # print("Cosine RMSE:", cosine_rmse)
-        # average_human_score_list = [compute_average_score_baseline(human_scores)] * len(human_scores)
-        # average_score_baseline_rmse = compute_root_mean_squared_error(human_scores, average_human_score_list)
-        # print("RMSE of average score predictor:", average_score_baseline_rmse)
-
-
-if __name__ == '__main__':
-    main()
-
-    # QWK results
-    # Connected to database
-    # Collection : Beetle - AI/human QWK: 0.5888277689527681
-    # Connected to database
-    # Collection : SAF - AI/human QWK: 0.4075637509986396
-    # Connected to database
-    # Collection : Mohler - AI/human QWK: 0.7128694718369806
-    # Connected to database
-    # Collection : SciEntsBank - AI/human QWK: 0.5271823778090929
-
-    # Connected to database
-    # Collection : Beetle - AI & human QWK: 0.5888277689527681
-    # Connected to database
-    # Collection : SAF - AI & human QWK: 0.4075637509986396
-    # Connected to database
-    # Collection : Mohler - AI & human QWK: 0.7128694718369806
-    # Connected to database
-    # Collection : SciEntsBank - AI & human QWK: 0.5271823778090929
